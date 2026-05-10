@@ -1,0 +1,26 @@
+[package]
+name = "focus-pro"
+version = "0.1.0"
+description = "Focus Pro — Régie Multimédia pour Église"
+authors = ["Edific Studio"]
+edition = "2021"
+
+[lib]
+name = "focus_pro_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+csv = "1"
+quick-xml = { version = "0.36", features = ["serialize"] }
+regex = "1"
+zip = "2"

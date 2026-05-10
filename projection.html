@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Focus Pro — Projection</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;600&family=JetBrains+Mono:wght@300;400&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: #000;
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+    }
+
+    /* ── BLACKOUT ── */
+    #blackout {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      z-index: 999;
+      display: none;
+    }
+
+    #blackout.active { display: block; }
+
+    /* ── MAIN CONTENT AREA ── */
+    #stage {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      background: #000;
+      transition: background 0.4s ease;
+    }
+
+    /* ── TEXT DISPLAY ── */
+    #text-display {
+      text-align: center;
+      padding: 8vh 10vw;
+      max-width: 100%;
+      animation: fade-in 0.35s ease;
+    }
+
+    #main-text {
+      font-size: clamp(1.8rem, 6vw, 7rem);
+      font-weight: 300;
+      color: #ffffff;
+      line-height: 1.35;
+      letter-spacing: 0.01em;
+      text-shadow: 0 2px 40px rgba(0,0,0,0.8);
+      white-space: pre-wrap;
+    }
+
+    #ref-text {
+      font-size: clamp(0.7rem, 1.5vw, 1.4rem);
+      color: rgba(212, 175, 55, 0.7);
+      margin-top: 3vh;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ── MEDIA DISPLAY ── */
+    #media-display {
+      width: 100%;
+      height: 100%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    #media-display.active { display: flex; }
+    #text-display.hidden  { display: none; }
+
+    #media-icon  { font-size: 10vw; }
+    #media-title { font-size: clamp(1rem, 3vw, 3rem); color: rgba(255,255,255,0.7); font-weight: 300; }
+    #media-sub   { font-size: clamp(0.6rem, 1.5vw, 1.2rem); color: rgba(212,175,55,0.5); font-family: 'JetBrains Mono', monospace; }
+
+    /* ── STANDBY ── */
+    #standby {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      z-index: 10;
+    }
+
+    #standby.hidden { display: none; }
+
+    #standby-text {
+      font-size: clamp(0.6rem, 1.2vw, 1rem);
+      color: rgba(255,255,255,0.08);
+      letter-spacing: 0.5em;
+      text-transform: uppercase;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ── LOGO OVERLAY ── */
+    #logo-overlay {
+      position: fixed;
+      bottom: 4vh;
+      right: 4vw;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+
+    #logo-overlay.active { opacity: 1; }
+
+    #logo-mark {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, #c9a227, #f0cc5a, #d4af37);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 900;
+      color: #000;
+    }
+
+    /* ── SLIDE COUNTER ── */
+    #slide-counter {
+      position: fixed;
+      bottom: 3vh;
+      left: 4vw;
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.1);
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: 0.2em;
+    }
+
+    /* ── TRANSITIONS ── */
+    @keyframes fade-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .transition-fade     { animation: fade-in 0.4s ease; }
+    .transition-dissolve { animation: fade-in 0.7s ease; }
+    .transition-cut      { animation: none; }
+    .transition-wipe     { animation: wipe-in 0.4s ease; }
+    .transition-slide    { animation: slide-in 0.35s ease; }
+
+    @keyframes wipe-in {
+      from { clip-path: inset(0 100% 0 0); }
+      to   { clip-path: inset(0 0% 0 0); }
+    }
+
+    @keyframes slide-in {
+      from { transform: translateX(40px); opacity: 0; }
+      to   { transform: translateX(0); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div id="blackout"></div>
+
+  <div id="stage">
+    <div id="standby">
+      <span id="standby-text">FOCUS PRO — STANDBY</span>
+    </div>
+
+    <div id="text-display">
+      <div id="main-text"></div>
+      <div id="ref-text"></div>
+    </div>
+
+    <div id="media-display">
+      <div id="media-icon"></div>
+      <div id="media-title"></div>
+      <div id="media-sub"></div>
+    </div>
+  </div>
+
+  <div id="logo-overlay">
+    <div id="logo-mark">FP</div>
+  </div>
+
+  <div id="slide-counter"></div>
+
+  <script type="module" src="/src/projection-main.ts"></script>
+</body>
+</html>
