@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Library } from "./components/LibraryPanel";
-import { Monitor } from "./components/MonitorPanel";
-import { LiveStatus } from "./components/StatusPanel";
+import { LibraryPanel as Library } from "./components/LibraryPanel";
+import { MonitorPanel as Monitor } from "./components/MonitorPanel";
+import { StatusPanel as LiveStatus } from "./components/StatusPanel";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
