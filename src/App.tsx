@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
   LayoutDashboard, Camera, Settings, Zap, ZapOff,
@@ -45,6 +45,12 @@ function buildPayload(prog: ProgramItem, transition: TransitionType): object | n
       ? item.slides[prog.slideIndex] ?? item.slides[0]
       : item.content ?? item.title;
 
+  // Convert local file paths to asset:// URLs readable by Tauri webviews
+  const needsFileSrc = (item.type === 'video' || item.type === 'photo' || item.type === 'audio');
+  const fileSrc = needsFileSrc && item.filePath
+    ? convertFileSrc(item.filePath)
+    : '';
+
   return {
     type:            item.type,
     title:           item.title,
@@ -53,6 +59,7 @@ function buildPayload(prog: ProgramItem, transition: TransitionType): object | n
     thumbnail_color: item.thumbnailColor ?? '',
     url:             item.url ?? '',
     duration:        item.duration ?? '',
+    file_src:        fileSrc,
     transition,
   };
 }

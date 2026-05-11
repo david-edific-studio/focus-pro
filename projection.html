@@ -71,22 +71,65 @@
     }
 
     /* ── MEDIA DISPLAY ── */
-    #media-display {
+    #text-display.hidden { display: none; }
+
+    /* Video */
+    #video-display {
+      position: absolute;
+      inset: 0;
+      display: none;
+      background: #000;
+    }
+    #video-display.active { display: block; }
+    #video-display video {
       width: 100%;
       height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    /* Image */
+    #image-display {
+      position: absolute;
+      inset: 0;
+      display: none;
+      background: #000;
+      align-items: center;
+      justify-content: center;
+    }
+    #image-display.active { display: flex; }
+    #image-display img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    /* Audio */
+    #audio-display {
+      position: absolute;
+      inset: 0;
       display: none;
       align-items: center;
       justify-content: center;
       flex-direction: column;
-      gap: 20px;
+      gap: 24px;
+      background: #000;
     }
-
-    #media-display.active { display: flex; }
-    #text-display.hidden  { display: none; }
-
-    #media-icon  { font-size: 10vw; }
-    #media-title { font-size: clamp(1rem, 3vw, 3rem); color: rgba(255,255,255,0.7); font-weight: 300; }
-    #media-sub   { font-size: clamp(0.6rem, 1.5vw, 1.2rem); color: rgba(212,175,55,0.5); font-family: 'JetBrains Mono', monospace; }
+    #audio-display.active { display: flex; }
+    #audio-display .audio-icon { font-size: 12vw; }
+    #audio-display .audio-title {
+      font-size: clamp(1rem, 3vw, 2.5rem);
+      color: rgba(255,255,255,0.7);
+      font-weight: 300;
+      text-align: center;
+    }
+    #audio-display .audio-sub {
+      font-size: clamp(0.6rem, 1.5vw, 1.2rem);
+      color: rgba(212,175,55,0.5);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    #audio-display audio { display: none; }
 
     /* ── STANDBY ── */
     #standby {
@@ -181,10 +224,19 @@
       <div id="ref-text"></div>
     </div>
 
-    <div id="media-display">
-      <div id="media-icon"></div>
-      <div id="media-title"></div>
-      <div id="media-sub"></div>
+    <div id="video-display">
+      <!-- populated dynamically -->
+    </div>
+
+    <div id="image-display">
+      <!-- populated dynamically -->
+    </div>
+
+    <div id="audio-display">
+      <div class="audio-icon">🎵</div>
+      <div class="audio-title"></div>
+      <div class="audio-sub"></div>
+      <audio></audio>
     </div>
   </div>
 

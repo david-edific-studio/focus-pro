@@ -13,6 +13,7 @@ interface ProjectionPayload {
   thumbnail_color?: string;
   url?: string;
   duration?: string;
+  file_src?: string;
   transition?: string;
 }
 
@@ -20,56 +21,112 @@ const standby      = document.getElementById('standby')!;
 const textDisplay  = document.getElementById('text-display')!;
 const mainText     = document.getElementById('main-text')!;
 const refText      = document.getElementById('ref-text')!;
-const mediaDisplay = document.getElementById('media-display')!;
-const mediaIcon    = document.getElementById('media-icon')!;
-const mediaTitle   = document.getElementById('media-title')!;
-const mediaSub     = document.getElementById('media-sub')!;
+const videoDisplay = document.getElementById('video-display')!;
+const imageDisplay = document.getElementById('image-display')!;
+const audioDisplay = document.getElementById('audio-display')!;
+const audioTitle   = audioDisplay.querySelector<HTMLElement>('.audio-title')!;
+const audioSub     = audioDisplay.querySelector<HTMLElement>('.audio-sub')!;
+const audioEl      = audioDisplay.querySelector<HTMLAudioElement>('audio')!;
 const blackout     = document.getElementById('blackout')!;
 const logoOverlay  = document.getElementById('logo-overlay')!;
 const stage        = document.getElementById('stage')!;
 
-const MEDIA_TYPES = new Set(['photo', 'video', 'audio', 'camera']);
-const MEDIA_ICONS: Record<string, string> = {
-  photo: '🖼', video: '🎬', audio: '🎧', camera: '📹', web: '🌐',
-};
+function hideAll() {
+  textDisplay.classList.add('hidden');
+  videoDisplay.classList.remove('active');
+  imageDisplay.classList.remove('active');
+  audioDisplay.classList.remove('active');
+  // Stop any playing media
+  const oldVideo = videoDisplay.querySelector('video');
+  if (oldVideo) { oldVideo.pause(); oldVideo.src = ''; }
+  audioEl.pause();
+  audioEl.src = '';
+}
 
-function applyTransition(transition = 'fade') {
-  textDisplay.className = '';
-  mediaDisplay.className = '';
-  void textDisplay.offsetWidth;
-  textDisplay.classList.add(`transition-${transition}`);
-  mediaDisplay.classList.add(`transition-${transition}`);
+function applyTransition(el: HTMLElement, transition = 'fade') {
+  el.className = el.className.replace(/transition-\S+/g, '').trim();
+  void el.offsetWidth; // reflow
+  el.classList.add(`transition-${transition}`);
 }
 
 function showContent(payload: ProjectionPayload) {
   standby.classList.add('hidden');
-  applyTransition(payload.transition);
+  hideAll();
+  stage.style.background = '#000';
 
-  const isMedia = MEDIA_TYPES.has(payload.type) || payload.type === 'web';
+  log(`[showContent] type=${payload.type} file_src="${payload.file_src}" title="${payload.title}"`);
 
-  if (isMedia) {
-    textDisplay.classList.add('hidden');
-    mediaDisplay.classList.add('active');
-    mediaIcon.textContent  = MEDIA_ICONS[payload.type] || '📄';
-    mediaTitle.textContent = payload.title || '';
-    mediaSub.textContent   = payload.type === 'web'
-      ? (payload.url || '')
-      : (payload.duration || payload.type.toUpperCase());
-    if (payload.thumbnail_color) stage.style.background = payload.thumbnail_color;
-  } else {
-    textDisplay.classList.remove('hidden');
-    mediaDisplay.classList.remove('active');
-    mediaDisplay.className = '';
-    stage.style.background = '#000';
-    mainText.textContent = payload.content || payload.title || '';
-    refText.textContent  = payload.reference || '';
+  switch (payload.type) {
+
+    case 'video': {
+      const src = payload.file_src || '';
+      if (!src) {
+        log('[video] ERREUR: file_src vide — vérifier convertFileSrc dans App.tsx');
+        break;
+      }
+      videoDisplay.innerHTML = `<video autoplay loop playsinline src="${src}"></video>`;
+      videoDisplay.classList.add('active');
+      applyTransition(videoDisplay, payload.transition);
+      const vid = videoDisplay.querySelector('video')!;
+      vid.play().catch(e => log(`[video] play() error: ${e}`));
+      log(`[video] lecture lancée: ${src}`);
+      break;
+    }
+
+    case 'photo': {
+      const src = payload.file_src || '';
+      if (!src) {
+        log('[photo] ERREUR: file_src vide — vérifier convertFileSrc dans App.tsx');
+        break;
+      }
+      imageDisplay.innerHTML = `<img src="${src}" alt="${payload.title || ''}" />`;
+      imageDisplay.classList.add('active');
+      applyTransition(imageDisplay, payload.transition);
+      log(`[photo] image affichée: ${src}`);
+      break;
+    }
+
+    case 'audio': {
+      const src = payload.file_src || '';
+      if (!src) {
+        log('[audio] ERREUR: file_src vide — vérifier convertFileSrc dans App.tsx');
+        break;
+      }
+      audioTitle.textContent = payload.title || '';
+      audioSub.textContent   = payload.duration || '';
+      audioEl.src = src;
+      audioEl.play().catch(e => log(`[audio] play() error: ${e}`));
+      audioDisplay.classList.add('active');
+      applyTransition(audioDisplay, payload.transition);
+      log(`[audio] lecture lancée: ${src}`);
+      break;
+    }
+
+    case 'web': {
+      // Web: show title/url as text fallback (no iframe for security reasons)
+      textDisplay.classList.remove('hidden');
+      mainText.textContent = payload.url || payload.title || '';
+      refText.textContent  = 'WEB';
+      applyTransition(textDisplay, payload.transition);
+      log(`[web] url affichée: ${payload.url}`);
+      break;
+    }
+
+    default: {
+      // Text-based: bible, song, slide, pptx, text
+      textDisplay.classList.remove('hidden');
+      mainText.textContent = payload.content || payload.title || '';
+      refText.textContent  = payload.reference || '';
+      applyTransition(textDisplay, payload.transition);
+      log(`[text] contenu affiché: "${mainText.textContent.slice(0, 60)}"`);
+      break;
+    }
   }
 }
 
 function showStandby() {
+  hideAll();
   standby.classList.remove('hidden');
-  textDisplay.classList.add('hidden');
-  mediaDisplay.classList.remove('active');
   stage.style.background = '#000';
 }
 
@@ -102,7 +159,6 @@ document.addEventListener('keydown', e => {
 showStandby();
 
 /* ── Tell the main window we are ready to receive content ── */
-// Small delay to ensure Tauri's IPC bridge is fully wired
 setTimeout(() => {
   log('[projection-ready] fenêtre prête, signal envoyé');
   emit('projection-ready', null).catch(() => {});
