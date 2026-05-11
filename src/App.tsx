@@ -32,15 +32,6 @@ const INIT: AppState = {
 
 type View = 'live' | 'cameras' | 'settings';
 
-function showContent(payload: ProjectionPayload) {
-  // On envoie l'info au terminal Rust
-  invoke('log_from_frontend', { 
-    message: `Réception de contenu : ${payload.title || payload.content}` 
-  }).catch(() => {});
-
-  standby.classList.add('hidden');
-  // ... le reste de ton code actuel ...
-}
 /* ── Global function that bypasses React closure stale issues ── */
 function fireToProjection(payload: object, eventName = 'projection-update') {
   invoke('send_to_projection', { payload, eventName }).catch(() => {});

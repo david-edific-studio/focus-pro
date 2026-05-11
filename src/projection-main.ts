@@ -1,4 +1,9 @@
 import { listen, emit } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
+
+function log(message: string) {
+  invoke('log_from_frontend', { message }).catch(() => {});
+}
 
 interface ProjectionPayload {
   type: string;
@@ -70,10 +75,13 @@ function showStandby() {
 
 /* ── Register all listeners first, THEN signal readiness ── */
 
-listen<ProjectionPayload>('projection-update', e => showContent(e.payload));
+listen<ProjectionPayload>('projection-update', e => {
+  log(`[projection-update] type=${e.payload.type} title="${e.payload.title}"`);
+  showContent(e.payload);
+});
 
 listen<ProjectionPayload>('projection-sync-content', e => {
-  // App.tsx sends the current PROGRAM content in response to projection-ready
+  log(`[projection-sync-content] type=${e.payload.type} title="${e.payload.title}"`);
   showContent(e.payload);
 });
 
@@ -96,5 +104,6 @@ showStandby();
 /* ── Tell the main window we are ready to receive content ── */
 // Small delay to ensure Tauri's IPC bridge is fully wired
 setTimeout(() => {
+  log('[projection-ready] fenêtre prête, signal envoyé');
   emit('projection-ready', null).catch(() => {});
 }, 100);
