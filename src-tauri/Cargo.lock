@@ -1096,6 +1096,7 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 name = "focus-pro"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "csv",
  "quick-xml 0.36.2",
  "regex",

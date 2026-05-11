@@ -9,16 +9,8 @@
     "dialog:default",
     "dialog:allow-open",
     "fs:default",
-    "fs:allow-read-file",
-    "fs:allow-read-dir",
-    "shell:default",
-    "asset:default",
-    {
-      "identifier": "asset:allow-asset",
-      "preference": {
-        "schemes": ["http", "https"],
-        "domains": ["asset.localhost"]
-      }
-    }
+    "fs:read-files",
+    "fs:read-dirs",
+    "shell:default"
   ]
 }

@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use tauri::Manager;
 use tauri::Emitter;
 use tauri::Listener;
+use base64::Engine as _;
 
 /* ═══════════════════════════════════════════════════════
    DATA STRUCTURES
@@ -436,6 +437,16 @@ async fn send_to_projection(
         .map_err(|e| e.to_string())
 }
 
+/// Reads any file from disk and returns it as a base64-encoded string.
+/// The caller is responsible for prepending the correct data-URI prefix
+/// (e.g. "data:image/png;base64," + result).
+#[tauri::command]
+fn get_file_b64(path: String) -> Result<String, String> {
+    let bytes = std::fs::read(&path).map_err(|e| format!("Erreur lecture {}: {}", path, e))?;
+    println!("[get_file_b64] lu {} octets depuis {}", bytes.len(), path);
+    Ok(base64::engine::general_purpose::STANDARD.encode(&bytes))
+}
+
 /////////
 #[tauri::command]
 fn log_from_frontend(message: String) {
@@ -501,7 +512,6 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_asset::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
@@ -518,6 +528,7 @@ pub fn run() {
             send_blackout,
             close_projection_window,
             projection_is_open,
+            get_file_b64,
         ])
         .setup(move |app| {
             // Seed the monitor state
