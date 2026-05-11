@@ -1,4 +1,4 @@
-import { listen } from '@tauri-apps/api/event';
+import { listen, emit } from '@tauri-apps/api/event';
 
 interface ProjectionPayload {
   type: string;
@@ -11,18 +11,17 @@ interface ProjectionPayload {
   transition?: string;
 }
 
-const standby       = document.getElementById('standby')!;
-const textDisplay   = document.getElementById('text-display')!;
-const mainText      = document.getElementById('main-text')!;
-const refText       = document.getElementById('ref-text')!;
-const mediaDisplay  = document.getElementById('media-display')!;
-const mediaIcon     = document.getElementById('media-icon')!;
-const mediaTitle    = document.getElementById('media-title')!;
-const mediaSub      = document.getElementById('media-sub')!;
-const blackout      = document.getElementById('blackout')!;
-const logoOverlay   = document.getElementById('logo-overlay')!;
-const slideCounter  = document.getElementById('slide-counter')!;
-const stage         = document.getElementById('stage')!;
+const standby      = document.getElementById('standby')!;
+const textDisplay  = document.getElementById('text-display')!;
+const mainText     = document.getElementById('main-text')!;
+const refText      = document.getElementById('ref-text')!;
+const mediaDisplay = document.getElementById('media-display')!;
+const mediaIcon    = document.getElementById('media-icon')!;
+const mediaTitle   = document.getElementById('media-title')!;
+const mediaSub     = document.getElementById('media-sub')!;
+const blackout     = document.getElementById('blackout')!;
+const logoOverlay  = document.getElementById('logo-overlay')!;
+const stage        = document.getElementById('stage')!;
 
 const MEDIA_TYPES = new Set(['photo', 'video', 'audio', 'camera']);
 const MEDIA_ICONS: Record<string, string> = {
@@ -48,10 +47,10 @@ function showContent(payload: ProjectionPayload) {
     mediaDisplay.classList.add('active');
     mediaIcon.textContent  = MEDIA_ICONS[payload.type] || '📄';
     mediaTitle.textContent = payload.title || '';
-    mediaSub.textContent   = payload.type === 'web' ? (payload.url || '') : (payload.duration || payload.type.toUpperCase());
-    if (payload.thumbnail_color) {
-      stage.style.background = payload.thumbnail_color;
-    }
+    mediaSub.textContent   = payload.type === 'web'
+      ? (payload.url || '')
+      : (payload.duration || payload.type.toUpperCase());
+    if (payload.thumbnail_color) stage.style.background = payload.thumbnail_color;
   } else {
     textDisplay.classList.remove('hidden');
     mediaDisplay.classList.remove('active');
@@ -67,37 +66,35 @@ function showStandby() {
   textDisplay.classList.add('hidden');
   mediaDisplay.classList.remove('active');
   stage.style.background = '#000';
-  slideCounter.textContent = '';
 }
 
-/* ── LISTEN TO TAURI EVENTS ── */
-listen<ProjectionPayload>('projection-update', event => {
-  showContent(event.payload);
+/* ── Register all listeners first, THEN signal readiness ── */
+
+listen<ProjectionPayload>('projection-update', e => showContent(e.payload));
+
+listen<ProjectionPayload>('projection-sync-content', e => {
+  // App.tsx sends the current PROGRAM content in response to projection-ready
+  showContent(e.payload);
 });
 
-listen<boolean>('projection-blackout', event => {
-  if (event.payload) {
-    blackout.classList.add('active');
-  } else {
-    blackout.classList.remove('active');
-  }
+listen<boolean>('projection-blackout', e => {
+  blackout.classList.toggle('active', e.payload);
 });
 
-listen<boolean>('projection-logo', event => {
-  if (event.payload) {
-    logoOverlay.classList.add('active');
-  } else {
-    logoOverlay.classList.remove('active');
-  }
+listen<boolean>('projection-logo', e => {
+  logoOverlay.classList.toggle('active', e.payload);
 });
 
-listen<null>('projection-clear', () => {
-  showStandby();
-});
+listen<null>('projection-clear', () => showStandby());
 
-/* ── KEYBOARD: ESC closes blackout ── */
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') blackout.classList.remove('active');
 });
 
 showStandby();
+
+/* ── Tell the main window we are ready to receive content ── */
+// Small delay to ensure Tauri's IPC bridge is fully wired
+setTimeout(() => {
+  emit('projection-ready', null).catch(() => {});
+}, 100);

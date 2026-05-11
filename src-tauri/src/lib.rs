@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 use tauri::Emitter;
+use tauri::Listener;
 
 /* ═══════════════════════════════════════════════════════
    DATA STRUCTURES
@@ -420,11 +421,17 @@ async fn open_projection_window(app: tauri::AppHandle, monitor_id: usize) -> Res
 }
 
 /// Sends the current PROGRAM content to the projection window.
-/// Called every time PUSH TO LIVE is pressed.
+/// event_name lets the caller choose between "projection-update" (normal push)
+/// and "projection-sync-content" (initial sync on ready).
 #[tauri::command]
-async fn send_to_projection(app: tauri::AppHandle, payload: serde_json::Value) -> Result<(), String> {
+async fn send_to_projection(
+    app: tauri::AppHandle,
+    payload: serde_json::Value,
+    event_name: Option<String>,
+) -> Result<(), String> {
+    let ev = event_name.as_deref().unwrap_or("projection-update");
     match app.get_webview_window("projection") {
-        Some(win) => win.emit("projection-update", &payload).map_err(|e| e.to_string()),
+        Some(win) => win.emit(ev, &payload).map_err(|e| e.to_string()),
         None      => Err("Aucune fenêtre de projection ouverte".to_string()),
     }
 }
@@ -509,6 +516,16 @@ pub fn run() {
             *monitor_state_clone.lock().unwrap() = initial;
             // Start hot-plug watcher
             start_monitor_watcher(app.handle().clone(), monitor_state_clone.clone());
+
+            // When the projection window signals it is ready, forward the event
+            // to the main window so App.tsx can send the current PROGRAM content.
+            let app_handle = app.handle().clone();
+            app.handle().listen("projection-ready", move |_event| {
+                if let Some(main_win) = app_handle.get_webview_window("main") {
+                    let _ = main_win.emit("projection-needs-sync", ());
+                }
+            });
+
             Ok(())
         })
         .run(tauri::generate_context!())

@@ -40,14 +40,27 @@ function buildPayload(item: ProgramItem, transition: TransitionType) {
   };
 }
 
+/* Push a payload directly to projection, bypassing React state closure issues */
+function fireToProjection(payload: object, eventName = 'projection-update') {
+  invoke('send_to_projection', { payload, eventName }).catch(() => {});
+}
+
 function App() {
-  const [state, setState]           = useState<AppState>(INIT);
-  const [toast, setToast]           = useState<string | null>(null);
-  const [rightTab, setRightTab]     = useState<RightTab>('status');
-  const [monitors, setMonitors]     = useState<MonitorInfo[]>([]);
+  const [state, setState]                 = useState<AppState>(INIT);
+  const [toast, setToast]                 = useState<string | null>(null);
+  const [rightTab, setRightTab]           = useState<RightTab>('status');
+  const [monitors, setMonitors]           = useState<MonitorInfo[]>([]);
   const [activeMonitor, setActiveMonitor] = useState<number | null>(null);
-  const [projOpen, setProjOpen]     = useState(false);
+  const [projOpen, setProjOpen]           = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /* Always-fresh ref to state — readable inside any callback without closure staleness */
+  const stateRef = useRef<AppState>(INIT);
+  useEffect(() => { stateRef.current = state; }, [state]);
+
+  /* Always-fresh ref to projOpen */
+  const projOpenRef = useRef(false);
+  useEffect(() => { projOpenRef.current = projOpen; }, [projOpen]);
 
   const notify = useCallback((msg: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -57,34 +70,49 @@ function App() {
 
   /* ── Load monitors on mount ── */
   useEffect(() => {
-    invoke<MonitorInfo[]>('get_monitors').then(m => {
-      setMonitors(m);
+    invoke<MonitorInfo[]>('get_monitors').then(setMonitors).catch(() => {});
+  }, []);
+
+  /* ── Listen for HDMI hot-plug ── */
+  useEffect(() => {
+    const u = listen<MonitorInfo[]>('monitors-changed', e => {
+      setMonitors(e.payload);
+      notify(`Écrans mis à jour (${e.payload.length} détectés)`);
+    });
+    return () => { u.then(fn => fn()); };
+  }, [notify]);
+
+  /* ── Check if projection already open ── */
+  useEffect(() => {
+    invoke<boolean>('projection_is_open').then(open => {
+      setProjOpen(open);
+      projOpenRef.current = open;
     }).catch(() => {});
   }, []);
 
-  /* ── Listen for hot-plug changes from Rust ── */
+  /* ── projection-needs-sync : projection window just became ready ──
+     Read stateRef (always fresh) and send PROGRAM if any, else PREVIEW. */
   useEffect(() => {
-    const unlisten = listen<MonitorInfo[]>('monitors-changed', event => {
-      setMonitors(event.payload);
-      notify(`Écrans mis à jour (${event.payload.length} détectés)`);
+    const u = listen('projection-needs-sync', () => {
+      const s = stateRef.current;
+      /* Pick PROGRAM if it has content, otherwise PREVIEW */
+      const source = s.program.item ? s.program : s.preview;
+      const payload = buildPayload(source, s.transition);
+      if (payload) {
+        fireToProjection(payload, 'projection-sync-content');
+      }
     });
-    return () => { unlisten.then(fn => fn()); };
-  }, [notify]);
+    return () => { u.then(fn => fn()); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* ── Check if projection window is already open on resume ── */
-  useEffect(() => {
-    invoke<boolean>('projection_is_open').then(setProjOpen).catch(() => {});
+  /* ── Core helper: send current PROGRAM to projection ── */
+  const pushProgram = useCallback((programItem: ProgramItem, transition: TransitionType) => {
+    if (!projOpenRef.current) return;
+    const payload = buildPayload(programItem, transition);
+    if (payload) fireToProjection(payload, 'projection-update');
   }, []);
 
-  /* ── Helpers ── */
-  const sendToProjection = useCallback(async (item: ProgramItem, transition: TransitionType) => {
-    if (!projOpen) return;
-    const payload = buildPayload(item, transition);
-    if (!payload) return;
-    try { await invoke('send_to_projection', { payload }); } catch { /* window may be closed */ }
-  }, [projOpen]);
-
-  /* ── Library actions ── */
+  /* ── Library ── */
   const selectItem = useCallback((item: LibraryItem) =>
     setState(s => ({ ...s, selectedItem: item })), []);
 
@@ -93,38 +121,40 @@ function App() {
     notify(`→ Preview : ${item.title}`);
   }, [notify]);
 
-  /* ── PUSH TO LIVE: copies preview → program + sends to HDMI ── */
+  /* ── PUSH TO LIVE ── */
   const pushToProgram = useCallback(() => {
     setState(s => {
       if (!s.preview.item) return s;
-      const next = { ...s, program: { ...s.preview }, isBlackout: false };
-      sendToProjection(next.program, next.transition);
+      const newProgram: ProgramItem = { ...s.preview };
+      const next = { ...s, program: newProgram, isBlackout: false };
+      /* Use stateRef transition (always fresh) */
+      pushProgram(newProgram, s.transition);
       return next;
     });
     notify('▶ LIVE');
-  }, [sendToProjection, notify]);
+  }, [pushProgram, notify]);
 
-  /* ── Slide navigation ── */
+  /* ── Slide navigation PREVIEW ── */
   const setPreviewSlide = useCallback((i: number) =>
     setState(s => ({ ...s, preview: { ...s.preview, slideIndex: i } })), []);
 
+  /* ── Slide navigation PROGRAM — mirrors to HDMI immediately ── */
   const setProgramSlide = useCallback((i: number) => {
     setState(s => {
-      const next = { ...s, program: { ...s.program, slideIndex: i } };
-      sendToProjection(next.program, next.transition);
-      return next;
+      const newProgram = { ...s.program, slideIndex: i };
+      pushProgram(newProgram, s.transition);
+      return { ...s, program: newProgram };
     });
-  }, [sendToProjection]);
+  }, [pushProgram]);
 
-  /* ── Next slide on preview ── */
+  /* ── Next slide (preview) ── */
   const nextSlide = useCallback(() => setState(s => {
     const slides = s.preview.item?.slides;
     if (!slides) return s;
-    const i = Math.min(s.preview.slideIndex + 1, slides.length - 1);
-    return { ...s, preview: { ...s.preview, slideIndex: i } };
+    return { ...s, preview: { ...s.preview, slideIndex: Math.min(s.preview.slideIndex + 1, slides.length - 1) } };
   }), []);
 
-  /* ── Toolbar toggles ── */
+  /* ── Blackout ── */
   const toggleBlackout = useCallback(() => {
     setState(s => {
       const next = !s.isBlackout;
@@ -139,10 +169,10 @@ function App() {
   const toggleLogo = useCallback(() => {
     setState(s => {
       const next = !s.isLogoOn;
-      if (projOpen) invoke('send_to_projection', { payload: { __type: 'logo', active: next } }).catch(() => {});
+      if (projOpenRef.current) fireToProjection({ active: next }, 'projection-logo');
       return { ...s, isLogoOn: next };
     });
-  }, [projOpen]);
+  }, []);
 
   const toggleMute = useCallback(() =>
     setState(s => ({ ...s, isMuted: !s.isMuted })), []);
@@ -152,33 +182,26 @@ function App() {
 
   const clearProgram = useCallback(() => {
     setState(s => ({ ...s, program: EMPTY }));
-    if (projOpen) invoke('send_to_projection', { payload: { __type: 'clear' } }).catch(() => {});
-  }, [projOpen]);
+    if (projOpenRef.current) fireToProjection({}, 'projection-clear');
+  }, []);
 
-  /* ── Camera select ── */
   const selectCamera = useCallback((id: string) => {
     const item: LibraryItem = { id, type: 'camera', title: `Caméra ${id}` };
     setState(s => ({ ...s, activeCamera: id, preview: { item, slideIndex: 0, timestamp: Date.now() } }));
     notify(`📹 ${id}`);
   }, [notify]);
 
-  /* ── HDMI projection window ── */
+  /* ── Open HDMI projection window ── */
   const openProjection = useCallback(async (monId: number) => {
     try {
       await invoke('open_projection_window', { monitorId: monId });
       setActiveMonitor(monId);
       setProjOpen(true);
+      projOpenRef.current = true;
       notify(`Projection ouverte → Écran ${monId + 1}`);
-      // If there's already a PROGRAM item, send it immediately
-      setState(s => {
-        if (s.program.item) {
-          const payload = buildPayload(s.program, s.transition);
-          if (payload) {
-            setTimeout(() => invoke('send_to_projection', { payload }).catch(() => {}), 400);
-          }
-        }
-        return s;
-      });
+      /* projection-needs-sync will fire automatically from projection-main.ts
+         once its listeners are registered (~100ms). We DON'T send here to
+         avoid a race where the window isn't ready yet. */
     } catch (e) { notify(`Erreur : ${e}`); }
   }, [notify]);
 
@@ -187,6 +210,7 @@ function App() {
       await invoke('close_projection_window');
       setActiveMonitor(null);
       setProjOpen(false);
+      projOpenRef.current = false;
       notify('Projection fermée');
     } catch { /* ignore */ }
   }, [notify]);
@@ -209,7 +233,6 @@ function App() {
 
   return (
     <div className="shell">
-      {/* Blackout overlay (régie) */}
       {state.isBlackout && (
         <div className="blackout" onClick={toggleBlackout}>
           <span className="blackout-lbl">BLACKOUT — clic ou F1 pour désactiver</span>
@@ -218,7 +241,6 @@ function App() {
 
       {toast && <div className="toast">{toast}</div>}
 
-      {/* ── TITLEBAR ── */}
       <header className="titlebar">
         <div className="tb-brand">
           <div className="tb-logo">FP</div>
@@ -251,7 +273,6 @@ function App() {
         </div>
       </header>
 
-      {/* ── TOOLBAR ── */}
       <div className="toolbar">
         <button className={`tb-btn danger${state.isBlackout ? ' on' : ''}`} onClick={toggleBlackout} title="F1">
           <Moon size={11} />Blackout
@@ -267,7 +288,6 @@ function App() {
           {state.isMuted ? <VolumeX size={11} /> : <Volume2 size={11} />}
           {state.isMuted ? 'Muet' : 'Audio'}
         </button>
-
         <div className="tb-sep" />
         <button className="tb-btn"><Video size={11} />NDI Out</button>
         <button className="tb-btn"><Zap size={11} />RTMP</button>
@@ -275,7 +295,6 @@ function App() {
         <button className="tb-btn" onClick={nextSlide} title="→">
           <SkipForward size={11} />Slide +
         </button>
-
         {isLive && (
           <div className="tb-live-info">
             <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--red)', display: 'inline-block', animation: 'pulse-dot 1.2s infinite' }} />
@@ -284,9 +303,7 @@ function App() {
         )}
       </div>
 
-      {/* ── WORKSPACE ── */}
       <div className="workspace">
-
         <LibraryPanel
           selectedItem={state.selectedItem}
           onSelect={selectItem}
