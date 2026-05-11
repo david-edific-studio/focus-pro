@@ -430,11 +430,18 @@ async fn send_to_projection(
     event_name: Option<String>,
 ) -> Result<(), String> {
     let ev = event_name.as_deref().unwrap_or("projection-update");
-    match app.get_webview_window("projection") {
-        Some(win) => win.emit(ev, &payload).map_err(|e| e.to_string()),
-        None      => Err("Aucune fenêtre de projection ouverte".to_string()),
-    }
+    
+    // Au lieu de chercher une fenêtre spécifique, on diffuse à toute l'appli
+    // La fenêtre de projection qui écoute cet événement l'attrapera au vol
+    app.emit(ev, &payload).map_err(|e| e.to_string())
 }
+
+/////////
+#[tauri::command]
+fn log_from_frontend(message: String) {
+    println!(" [PROJECTION LOG]: {}", message);
+}
+////////
 
 /// Sends a BLACKOUT signal to the projection window.
 #[tauri::command]
@@ -506,6 +513,7 @@ pub fn run() {
             get_monitors,
             open_projection_window,
             send_to_projection,
+            log_from_frontend,
             send_blackout,
             close_projection_window,
             projection_is_open,

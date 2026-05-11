@@ -32,6 +32,15 @@ const INIT: AppState = {
 
 type View = 'live' | 'cameras' | 'settings';
 
+function showContent(payload: ProjectionPayload) {
+  // On envoie l'info au terminal Rust
+  invoke('log_from_frontend', { 
+    message: `Réception de contenu : ${payload.title || payload.content}` 
+  }).catch(() => {});
+
+  standby.classList.add('hidden');
+  // ... le reste de ton code actuel ...
+}
 /* ── Global function that bypasses React closure stale issues ── */
 function fireToProjection(payload: object, eventName = 'projection-update') {
   invoke('send_to_projection', { payload, eventName }).catch(() => {});
@@ -113,17 +122,31 @@ export default function App() {
   }, []);
 
   /* ── TAKE: push PREVIEW → PROGRAM + send to projection ── */
-  const handleTake = useCallback(() => {
-    setState(s => {
-      if (!s.preview.item) return s;
-      const next = { ...s, program: { ...s.preview, timestamp: Date.now() } };
-      const payload = buildPayload(next.program, next.transition);
-      if (payload && projOpenRef.current) {
-        fireToProjection(payload);
-      }
-      return next;
-    });
-  }, []);
+
+const handleTake = useCallback(() => {
+  setState(s => {
+    if (!s.preview.item) return s;
+    
+    // 1. On prépare le prochain état
+    const next = { ...s, program: { ...s.preview, timestamp: Date.now() } };
+    
+    // 2. On construit ce qui doit être projeté
+    const payload = buildPayload(next.program, next.transition);
+    
+    // 3. On envoie ! (On retire la condition stricte projOpenRef si elle bloque)
+    if (payload) {
+      console.log("Tentative d'envoi à la projection...", payload);
+      fireToProjection(payload);
+      console.log("Flux envoye vers le terminal...");
+    }
+    
+    return next;
+  });
+  showToast("PUSH TO LIVE"); // Pour confirmer visuellement l'action
+}, [showToast]);
+
+
+
 
   /* ── Next slide in PROGRAM ── */
   const handleNextSlide = useCallback(() => {
