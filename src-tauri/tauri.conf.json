@@ -24,7 +24,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' asset: https://asset.localhost; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' asset: https://asset.localhost data: blob:; media-src 'self' asset: https://asset.localhost blob:; connect-src ipc: http://ipc.localhost"
+      "csp": "default-src 'self' 'unsafe-inline' asset: https://asset.localhost http://localhost:1420; img-src 'self' asset: https://asset.localhost data: blob: http://localhost:1420; media-src 'self' asset: https://asset.localhost blob: http://localhost:1420; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src ipc: http://ipc.localhost ws://localhost:1421"
     }
   },
   "bundle": {

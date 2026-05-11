@@ -1,5 +1,5 @@
 import { listen, emit } from '@tauri-apps/api/event';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 
 function log(message: string) {
   invoke('log_from_frontend', { message }).catch(() => {});
@@ -13,7 +13,7 @@ interface ProjectionPayload {
   thumbnail_color?: string;
   url?: string;
   duration?: string;
-  file_src?: string;
+  file_path?: string;
   transition?: string;
 }
 
@@ -36,7 +36,6 @@ function hideAll() {
   videoDisplay.classList.remove('active');
   imageDisplay.classList.remove('active');
   audioDisplay.classList.remove('active');
-  // Stop any playing media
   const oldVideo = videoDisplay.querySelector('video');
   if (oldVideo) { oldVideo.pause(); oldVideo.src = ''; }
   audioEl.pause();
@@ -45,7 +44,7 @@ function hideAll() {
 
 function applyTransition(el: HTMLElement, transition = 'fade') {
   el.className = el.className.replace(/transition-\S+/g, '').trim();
-  void el.offsetWidth; // reflow
+  void el.offsetWidth;
   el.classList.add(`transition-${transition}`);
 }
 
@@ -54,56 +53,54 @@ function showContent(payload: ProjectionPayload) {
   hideAll();
   stage.style.background = '#000';
 
-  log(`[showContent] type=${payload.type} file_src="${payload.file_src}" title="${payload.title}"`);
+  // Convert the raw file path to an asset:// URL in THIS webview's context
+  const assetSrc = payload.file_path ? convertFileSrc(payload.file_path) : '';
+
+  log(`[showContent] type=${payload.type} file_path="${payload.file_path}" assetSrc="${assetSrc}"`);
 
   switch (payload.type) {
 
     case 'video': {
-      const src = payload.file_src || '';
-      if (!src) {
-        log('[video] ERREUR: file_src vide — vérifier convertFileSrc dans App.tsx');
+      if (!assetSrc) {
+        log('[video] ERREUR: file_path vide');
         break;
       }
-      videoDisplay.innerHTML = `<video autoplay loop playsinline src="${src}"></video>`;
+      videoDisplay.innerHTML = `<video autoplay loop playsinline src="${assetSrc}"></video>`;
       videoDisplay.classList.add('active');
       applyTransition(videoDisplay, payload.transition);
-      const vid = videoDisplay.querySelector('video')!;
-      vid.play().catch(e => log(`[video] play() error: ${e}`));
-      log(`[video] lecture lancée: ${src}`);
+      videoDisplay.querySelector('video')!.play().catch(e => log(`[video] play() error: ${e}`));
+      log(`[video] lecture lancée: ${assetSrc}`);
       break;
     }
 
     case 'photo': {
-      const src = payload.file_src || '';
-      if (!src) {
-        log('[photo] ERREUR: file_src vide — vérifier convertFileSrc dans App.tsx');
+      if (!assetSrc) {
+        log('[photo] ERREUR: file_path vide');
         break;
       }
-      imageDisplay.innerHTML = `<img src="${src}" alt="${payload.title || ''}" />`;
+      imageDisplay.innerHTML = `<img src="${assetSrc}" alt="${payload.title || ''}" />`;
       imageDisplay.classList.add('active');
       applyTransition(imageDisplay, payload.transition);
-      log(`[photo] image affichée: ${src}`);
+      log(`[photo] image affichée: ${assetSrc}`);
       break;
     }
 
     case 'audio': {
-      const src = payload.file_src || '';
-      if (!src) {
-        log('[audio] ERREUR: file_src vide — vérifier convertFileSrc dans App.tsx');
+      if (!assetSrc) {
+        log('[audio] ERREUR: file_path vide');
         break;
       }
       audioTitle.textContent = payload.title || '';
       audioSub.textContent   = payload.duration || '';
-      audioEl.src = src;
+      audioEl.src = assetSrc;
       audioEl.play().catch(e => log(`[audio] play() error: ${e}`));
       audioDisplay.classList.add('active');
       applyTransition(audioDisplay, payload.transition);
-      log(`[audio] lecture lancée: ${src}`);
+      log(`[audio] lecture lancée: ${assetSrc}`);
       break;
     }
 
     case 'web': {
-      // Web: show title/url as text fallback (no iframe for security reasons)
       textDisplay.classList.remove('hidden');
       mainText.textContent = payload.url || payload.title || '';
       refText.textContent  = 'WEB';
@@ -113,18 +110,9 @@ function showContent(payload: ProjectionPayload) {
     }
 
     default: {
-      // Text-based: bible, song, slide, pptx, text
-      // Guard: if file_src is present but type is unrecognised, show a neutral placeholder
-      if (payload.file_src) {
-        log(`[default] type="${payload.type}" non géré avec file_src — affichage titre uniquement`);
-        textDisplay.classList.remove('hidden');
-        mainText.textContent = payload.title || '';
-        refText.textContent  = payload.type.toUpperCase();
-      } else {
-        textDisplay.classList.remove('hidden');
-        mainText.textContent = payload.content || payload.title || '';
-        refText.textContent  = payload.reference || '';
-      }
+      textDisplay.classList.remove('hidden');
+      mainText.textContent = payload.content || payload.title || '';
+      refText.textContent  = payload.reference || '';
       applyTransition(textDisplay, payload.transition);
       log(`[text] contenu affiché: "${mainText.textContent.slice(0, 60)}"`);
       break;
@@ -137,8 +125,6 @@ function showStandby() {
   standby.classList.remove('hidden');
   stage.style.background = '#000';
 }
-
-/* ── Register all listeners first, THEN signal readiness ── */
 
 listen<ProjectionPayload>('projection-update', e => {
   log(`[projection-update] type=${e.payload.type} title="${e.payload.title}"`);
@@ -166,7 +152,6 @@ document.addEventListener('keydown', e => {
 
 showStandby();
 
-/* ── Tell the main window we are ready to receive content ── */
 setTimeout(() => {
   log('[projection-ready] fenêtre prête, signal envoyé');
   emit('projection-ready', null).catch(() => {});
