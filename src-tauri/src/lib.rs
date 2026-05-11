@@ -430,10 +430,10 @@ async fn send_to_projection(
     event_name: Option<String>,
 ) -> Result<(), String> {
     let ev = event_name.as_deref().unwrap_or("projection-update");
-    
-    // Au lieu de chercher une fenêtre spécifique, on diffuse à toute l'appli
-    // La fenêtre de projection qui écoute cet événement l'attrapera au vol
-    app.emit(ev, &payload).map_err(|e| e.to_string())
+    println!("[send_to_projection] event={} payload={}", ev, payload);
+    // emit_to targets the projection webview directly — works on both X11 and Wayland
+    app.emit_to(tauri::EventTarget::webview_window("projection"), ev, &payload)
+        .map_err(|e| e.to_string())
 }
 
 /////////
