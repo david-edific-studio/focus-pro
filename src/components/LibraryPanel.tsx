@@ -258,8 +258,9 @@ function FolderSection({ onAdd }: { onAdd: (item: LibraryItem) => void }) {
       const path = await open({ filters: [{ name: label, extensions: ext }], multiple: true });
       const paths = Array.isArray(path) ? path : path ? [path] : [];
       for (const p of paths) {
-        const name = p.split('/').pop() || p;
-        const item: LibraryItem = { id: `file-${Date.now()}-${Math.random()}`, type: type as any, title: name, subtitle: p.split('/').pop(), filePath: p };
+        // Support both Unix '/' and Windows '\' separators
+        const name = p.split(/[\\/]/).pop() || p;
+        const item: LibraryItem = { id: `file-${Date.now()}-${Math.random()}`, type: type as any, title: name, subtitle: name, filePath: p };
         onAdd(item);
       }
     } finally {

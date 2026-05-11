@@ -114,9 +114,17 @@ function showContent(payload: ProjectionPayload) {
 
     default: {
       // Text-based: bible, song, slide, pptx, text
-      textDisplay.classList.remove('hidden');
-      mainText.textContent = payload.content || payload.title || '';
-      refText.textContent  = payload.reference || '';
+      // Guard: if file_src is present but type is unrecognised, show a neutral placeholder
+      if (payload.file_src) {
+        log(`[default] type="${payload.type}" non géré avec file_src — affichage titre uniquement`);
+        textDisplay.classList.remove('hidden');
+        mainText.textContent = payload.title || '';
+        refText.textContent  = payload.type.toUpperCase();
+      } else {
+        textDisplay.classList.remove('hidden');
+        mainText.textContent = payload.content || payload.title || '';
+        refText.textContent  = payload.reference || '';
+      }
       applyTransition(textDisplay, payload.transition);
       log(`[text] contenu affiché: "${mainText.textContent.slice(0, 60)}"`);
       break;
